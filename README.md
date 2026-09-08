@@ -86,6 +86,12 @@ npm run lint
 npm test
 ```
 
+Das Paket trägt bewusst **kein `prepare`-Skript**: npm ordnet die Läufe von
+`file:`-Abhängigkeiten nicht nach der Peer-Beziehung, und führt Install-Skripte
+inzwischen ohnehin nicht mehr ungefragt aus. Wer `dist/` braucht, baut
+ausdrücklich und in der Reihenfolge eeb-format → vokabulare →
+taktische-zeichen → meldekopf. Ausführlich im README von eeb-format.
+
 ## Lizenz
 
 EUPL-1.2
