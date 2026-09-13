@@ -20,7 +20,15 @@
  * unit-getestet.
  */
 
-import { jetztZeitpunkt, migriereBogen, type Einheit, type Erfassungsbogen } from "@bos/eeb-format";
+import {
+  bogenAnonymisiert,
+  datenschutzfristAbgelaufen,
+  jetztZeitpunkt,
+  migriereBogen,
+  type EebZeitpunkt,
+  type Einheit,
+  type Erfassungsbogen,
+} from "@bos/eeb-format";
 import { teileBogen, type AufteilungsWahl } from "./aufteilen.js";
 import { fuegeZusammen } from "./zusammenfuehren.js";
 import { aktive, imPapierkorb, papierkorbBereinigt } from "./papierkorb.js";
@@ -184,6 +192,84 @@ export function ruhendeBereinigt(
     (s) => s.geloeschtAm != null || jetzt - s.geaendert < AUFRAEUM_FRIST_MS,
   );
   return { liste: behalten, entfernt: liste.length - behalten.length };
+}
+
+// ------------------------------------------------------ Datenschutzfrist
+
+/**
+ * Uhr für die Datenschutzfrist — hineingereicht wie die Speicherhülle.
+ *
+ * Die Frist selbst regelt das Format (`@bos/eeb-format/datenschutzfrist`): Die
+ * Personaldaten eines Bogens verfallen 90 Tage nach seinem Stand, Übungen sind
+ * ausgenommen. Welche Uhrzeit dafür gilt, entscheidet das Produkt — der
+ * Erfassungsbogen reicht eine plausibilitätsgeprüfte Geräteuhr herein. Ohne
+ * Uhr anonymisiert die Sammlung nichts.
+ *
+ * Die Frist gilt je Meldung, unabhängig von der Aufräumfrist ruhender
+ * Sammlungen: Eine Sammlung, an der noch gearbeitet wird, altert nicht — die
+ * alten Meldungen darin schon.
+ */
+let fristUhr: (() => EebZeitpunkt) | null = null;
+
+export function datenschutzUhrSetzen(uhr: (() => EebZeitpunkt) | null): void {
+  fristUhr = uhr;
+}
+
+/**
+ * Meldung nach Ablauf der Datenschutzfrist: Bogen anonymisiert, und auch alles
+ * entfernt, was die Namen sonst weitertrüge. Das ist der empfangene Rohpayload
+ * (`herkunft`), der den Bogen im Klartext enthält, und der Signaturnachweis
+ * samt Absenderangaben — er deckt den veränderten Inhalt nicht mehr. Die
+ * Eintrags-ID folgt dem neuen Inhalt, damit ein erneuter Import des alten
+ * QR-Codes als Dublette erkannt wird.
+ *
+ * Unverändert zurück (dasselbe Objekt), wenn nichts zu tun ist.
+ */
+export function eintragNachFrist(e: MeldeEintrag, jetzt: EebZeitpunkt): MeldeEintrag {
+  if (!datenschutzfristAbgelaufen(e.bogen, jetzt)) return e;
+  const bogen = bogenAnonymisiert(e.bogen);
+  const id = bogenInhaltsId(bogen);
+  if (id === e.id && e.herkunft == null && e.signatur == null) return e;
+  const { herkunft, signatur, ...rest } = e;
+  void herkunft;
+  void signatur;
+  return { ...rest, id, bogen };
+}
+
+/**
+ * Datenschutzfrist auf alle Meldungen anwenden. `geaendert` der Sammlung bleibt
+ * unberührt: Das Anonymisieren ist keine Arbeit an der Sammlung und darf ihre
+ * Aufräumfrist nicht verlängern.
+ *
+ * Werden zwei Fassungen durch das Anonymisieren inhaltsgleich (sie
+ * unterschieden sich nur in Namen oder Kontakten), bleibt die erste stehen —
+ * zwei Einträge mit derselben ID vertrüge die Sammlung nicht.
+ */
+export function fristBereinigt(
+  liste: Einsatzsammlung[],
+  jetzt: EebZeitpunkt,
+): { liste: Einsatzsammlung[]; anonymisiert: number } {
+  let anonymisiert = 0;
+  const ergebnis = liste.map((s) => {
+    let veraendert = false;
+    const gesehen = new Set<string>();
+    const eintraege: MeldeEintrag[] = [];
+    for (const e of s.eintraege) {
+      const neu = eintragNachFrist(e, jetzt);
+      if (neu !== e) {
+        anonymisiert++;
+        veraendert = true;
+      }
+      if (gesehen.has(neu.id)) {
+        veraendert = true;
+        continue;
+      }
+      gesehen.add(neu.id);
+      eintraege.push(neu);
+    }
+    return veraendert ? { ...s, eintraege } : s;
+  });
+  return { liste: ergebnis, anonymisiert };
 }
 
 // ----------------------------------------------- Fingerabdruck & Hash (rein)
@@ -351,19 +437,21 @@ function speicher(): Speicherhuelle | null {
  * Zurückschreiben keine Papierkorb-Einträge verloren gehen. Abgelaufene
  * Einträge werden hier endgültig bereinigt (und der Stand persistiert).
  *
- * Zwei Uhren laufen: der Papierkorb (30 Tage seit dem Löschen) und die
+ * Drei Uhren laufen: der Papierkorb (30 Tage seit dem Löschen), die
  * Aufräumfrist ruhender Sammlungen (90 Tage ohne Änderung, siehe
- * AUFRAEUM_FRIST_MS). Beide greifen hier, weil jeder Lesepfad durch diese
- * Funktion läuft — eine Sammlung kann also nicht an der Frist vorbei liegen
- * bleiben, egal über welchen Weg die App sie anfasst.
+ * AUFRAEUM_FRIST_MS) und die Datenschutzfrist je Meldung (90 Tage nach dem
+ * Stand des Bogens, siehe {@link fristBereinigt}). Alle greifen hier, weil jeder
+ * Lesepfad durch diese Funktion läuft — eine Sammlung kann also nicht an einer
+ * Frist vorbei liegen bleiben, egal über welchen Weg die App sie anfasst.
  */
 function alleEinsaetzeLaden(): Einsatzsammlung[] {
   const s = speicher();
   if (!s) return [];
   const nachPapierkorb = papierkorbBereinigt(einsaetzeAusJson(s.getItem(SPEICHER_SCHLUESSEL)));
   const r = ruhendeBereinigt(nachPapierkorb.liste);
-  if (nachPapierkorb.entfernt > 0 || r.entfernt > 0) einsaetzeSpeichern(r.liste);
-  return r.liste;
+  const f = fristUhr ? fristBereinigt(r.liste, fristUhr()) : { liste: r.liste, anonymisiert: 0 };
+  if (nachPapierkorb.entfernt > 0 || r.entfernt > 0 || f.liste !== r.liste) einsaetzeSpeichern(f.liste);
+  return f.liste;
 }
 
 /** Aktive Einsätze (ohne Papierkorb) — das, was Listen anzeigen. */
@@ -479,12 +567,8 @@ export function meldungHinzufuegen(
   if (!s) return null;
 
   const migriert = migriereBogen(bogen);
-  const id = bogenInhaltsId(migriert);
-  const bestehend = s.eintraege.find((e) => e.id === id);
-  if (bestehend) return { eintrag: bestehend, neu: false };
-
-  const eintrag: MeldeEintrag = {
-    id,
+  const empfangen: MeldeEintrag = {
+    id: bogenInhaltsId(migriert),
     einheitSchluessel: opt.einheitSchluesselOverride ?? einheitSchluessel(migriert.einheit),
     empfangenAm: Date.now(),
     quelle: opt.quelle ?? "scan",
@@ -494,6 +578,12 @@ export function meldungHinzufuegen(
     herkunft: opt.herkunft,
     bogen: migriert,
   };
+  // Ein schon abgelaufener Bogen kommt gar nicht erst im Klartext in den
+  // Speicher — und die Dublettenprüfung vergleicht mit der anonymisierten Fassung.
+  const eintrag = fristUhr ? eintragNachFrist(empfangen, fristUhr()) : empfangen;
+  const bestehend = s.eintraege.find((e) => e.id === eintrag.id);
+  if (bestehend) return { eintrag: bestehend, neu: false };
+
   s.eintraege.push(eintrag);
   s.geaendert = Date.now();
   einsaetzeSpeichern(liste);
@@ -505,7 +595,11 @@ export function meldungHinzufuegen(
  * Gleiche Einsatz-ID → Meldungen mergen (Dedupe über die inhaltsbasierte
  * Eintrags-ID, keine Dubletten bei Reimport). Sonst als neuen Einsatz anlegen.
  */
-export function einsatzImportieren(s: Einsatzsammlung): { neuerEinsatz: boolean; hinzugefuegt: number } {
+export function einsatzImportieren(importiert: Einsatzsammlung): { neuerEinsatz: boolean; hinzugefuegt: number } {
+  // Abgelaufene Meldungen vor dem Mergen anonymisieren: nichts davon landet im
+  // Klartext im Speicher, und die Dedupe vergleicht mit den gespeicherten
+  // (schon anonymisierten) Fassungen.
+  const s = fristUhr ? fristBereinigt([importiert], fristUhr()).liste[0]! : importiert;
   const liste = alleEinsaetzeLaden();
   const vorhanden = liste.find((x) => x.id === s.id);
   if (!vorhanden) {

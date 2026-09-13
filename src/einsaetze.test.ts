@@ -41,6 +41,7 @@ import {
   AUFRAEUM_FRIST_MS,
   type Einsatzsammlung,
   speicherhuelleSetzen,
+  datenschutzUhrSetzen,
   type Speicherhuelle,
 } from "./einsaetze.js";
 
@@ -63,6 +64,7 @@ let speicher: MemStorage;
 beforeEach(() => {
   speicher = new MemStorage();
   speicherhuelleSetzen(speicher);
+  datenschutzUhrSetzen(null);
 });
 
 function person(nachname: string, rolle: StaerkeRolle): Person {
