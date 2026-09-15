@@ -136,6 +136,17 @@ describe("bogenDiff()", () => {
     expect(d.fahrzeugeGeaendert.map((a) => a.feld.split(" — ")[1])).toEqual(["StAN/Norm", "Änderungen"]);
   });
 
+  it("meldet eine geänderte Sitzplatzzahl am Fahrzeug", () => {
+    const alt = bogen();
+    const neu = bogen({
+      fahrzeuge: [{ typ: { code: 2 }, kennzeichen: "THW-00001", sitzplaetze: 7 }],
+    });
+    const d = bogenDiff(alt, neu);
+    const zeile = d.fahrzeugeGeaendert.find((a) => a.feld.endsWith("Sitzplätze"))!;
+    // Vorher galt der Richtwert des Typs — das ist keine Zahl, sondern ein „—".
+    expect(zeile).toMatchObject({ vorher: "—", nachher: "7" });
+  });
+
   it("zeigt Änderungen am Sofortbedarf", () => {
     const neu = bogen({
       sofortbedarf: {

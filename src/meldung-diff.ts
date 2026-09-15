@@ -243,6 +243,15 @@ export function bogenDiff(vorher: Erfassungsbogen, nachher: Erfassungsbogen): Bo
       a.f.stanKonform == null ? "—" : jaNein(a.f.stanKonform),
       b.f.stanKonform == null ? "—" : jaNein(b.f.stanKonform),
     );
+    // Nur die am Fahrzeug erfasste Zahl, nicht der Richtwert des Typs: sonst
+    // meldete eine gepflegte Vokabular-Tabelle eine Änderung, die die Einheit
+    // nie gemacht hat. „—" heißt hier: es gilt der Richtwert.
+    wenGeaendert(
+      d.fahrzeugeGeaendert,
+      `${name} — Sitzplätze`,
+      a.f.sitzplaetze?.toString() ?? "—",
+      b.f.sitzplaetze?.toString() ?? "—",
+    );
     wenGeaendert(d.fahrzeugeGeaendert, `${name} — Änderungen`, a.f.aenderungen || "—", b.f.aenderungen || "—");
   }
 
