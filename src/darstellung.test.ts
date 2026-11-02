@@ -4,6 +4,7 @@ import {
   Fahrerlaubnis,
   Geschlecht,
   Ernaehrung,
+  KontaktArt,
   OrganisationsTyp,
   StaerkeRolle,
   zeitpunktAusIso,
@@ -16,6 +17,7 @@ import {
   funkrufText,
   funktionsText,
   kennzeichenText,
+  kontaktText,
   orgLabel,
   vokabSortiert,
   vokabText,
@@ -150,6 +152,15 @@ describe("FE_EINGESCHLOSSEN", () => {
       if (klasse !== Fahrerlaubnis.NONE) expect(liste).toContain(klasse);
     }
     expect(FE_EINGESCHLOSSEN[Fahrerlaubnis.NONE]).toEqual([]);
+  });
+});
+
+describe("kontaktText()", () => {
+  it("Rufnummer und E-Mail mit (D)/(P), Funkrufname ohne (Schema 12)", () => {
+    expect(kontaktText({ art: KontaktArt.MOBIL, dienstlich: true, wert: "01711234567" })).toBe("Mobil: 01711234567 (D)");
+    expect(kontaktText({ art: KontaktArt.FESTNETZ, dienstlich: false, wert: "0441123" })).toBe("Tel: 0441123 (P)");
+    expect(kontaktText({ art: KontaktArt.EMAIL, dienstlich: true, wert: "a@b.de" })).toBe("eMail: a@b.de (D)");
+    expect(kontaktText({ art: KontaktArt.FUNK, dienstlich: true, wert: "Heros Oldenburg 18/13-1" })).toBe("Funk: Heros Oldenburg 18/13-1");
   });
 });
 

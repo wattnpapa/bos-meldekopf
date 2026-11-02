@@ -59,9 +59,12 @@ export function vokabularFuer(
   if (art === "ebene") return hierarchieEbenenFuer(org);
   if (org !== OrganisationsTyp.THW) return [];
   switch (art) {
-    case "einheitstyp": return THW_EINHEITSTYPEN;
-    case "funktion": return THW_FUNKTIONEN_ALLE;
-    case "fahrzeug": return THW_FAHRZEUGTYPEN;
+    case "einheitstyp":
+      return THW_EINHEITSTYPEN;
+    case "funktion":
+      return THW_FUNKTIONEN_ALLE;
+    case "fahrzeug":
+      return THW_FAHRZEUGTYPEN;
   }
 }
 
@@ -77,7 +80,8 @@ export function vokabularFuer(
  */
 export function vokabSortiert<T extends VokabularEintrag>(tabelle: T[]): T[] {
   return [...tabelle].sort(
-    (a, b) => a.kurz.localeCompare(b.kurz, "de") || a.name.localeCompare(b.name, "de"),
+    (a, b) =>
+      a.kurz.localeCompare(b.kurz, "de") || a.name.localeCompare(b.name, "de"),
   );
 }
 
@@ -118,7 +122,10 @@ export const FE_TEXT: Record<Fahrerlaubnis, string> = {
  * Grundlage des Qualifikationsfilters: wer CE gemeldet hat, ist auch ein
  * Treffer für „Kf B". Jede Klasse enthält sich selbst.
  */
-export const FE_EINGESCHLOSSEN: Record<Fahrerlaubnis, readonly Fahrerlaubnis[]> = (() => {
+export const FE_EINGESCHLOSSEN: Record<
+  Fahrerlaubnis,
+  readonly Fahrerlaubnis[]
+> = (() => {
   const F = Fahrerlaubnis;
   const t: Partial<Record<Fahrerlaubnis, readonly Fahrerlaubnis[]>> = {
     [F.NONE]: [],
@@ -146,7 +153,8 @@ export function funktionsText(p: Person, org: OrganisationsTyp): string {
   const tabelle = vokabularFuer(org, "funktion");
   const [grund, ...rest] = p.funktionen.map((f) => vokabText(f, tabelle));
   const klassen = alleFahrerlaubnisse(p);
-  const kf = klassen.length > 0 ? `Kf ${klassen.map((k) => FE_TEXT[k]).join("+")}` : "";
+  const kf =
+    klassen.length > 0 ? `Kf ${klassen.map((k) => FE_TEXT[k]).join("+")}` : "";
   const zusatz = [kf, ...rest].filter(Boolean).join(", ");
   return [grund, zusatz].filter(Boolean).join(" / ");
 }
@@ -155,11 +163,18 @@ export function kennzeichenText(f: Fahrzeug): string {
   return f.kennzeichen ?? "";
 }
 
-/** Erreichbarkeit einer Person wie im Bogenkopf/PDF ("Mobil: … (D)"). */
+/** Erreichbarkeit einer Person wie im Bogenkopf/PDF ("Mobil: … (D)", "Funk: Heros Oldenburg 18/13-1"). */
 export function kontaktText(k: Kontakt): string {
   // Alte Bögen konnten statt einer Adresse ein Template tragen (siehe Kontakt).
   if (k.emailTemplate != null) return `eMail: — (${k.dienstlich ? "D" : "P"})`;
-  const art = k.art === KontaktArt.EMAIL ? "eMail" : k.art === KontaktArt.MOBIL ? "Mobil" : "Tel";
+  // Ein Funkrufname (ab Schema 12) ist nie privat — ohne (D)/(P).
+  if (k.art === KontaktArt.FUNK) return `Funk: ${k.wert ?? ""}`;
+  const art =
+    k.art === KontaktArt.EMAIL
+      ? "eMail"
+      : k.art === KontaktArt.MOBIL
+        ? "Mobil"
+        : "Tel";
   return `${art}: ${k.wert ?? ""} (${k.dienstlich ? "D" : "P"})`;
 }
 
@@ -186,7 +201,11 @@ export function einheitOrt(e: Einheit): string {
  */
 export function einheitAnzeigename(e: Einheit): string {
   const org = e.organisationName?.trim() || orgLabel(e.organisation);
-  const typ = vokabText(e.einheitsTyp, vokabularFuer(e.organisation, "einheitstyp"), "name");
+  const typ = vokabText(
+    e.einheitsTyp,
+    vokabularFuer(e.organisation, "einheitstyp"),
+    "name",
+  );
   return [org, einheitOrt(e), typ].filter(Boolean).join(" ");
 }
 
@@ -196,7 +215,20 @@ export function datumDeutsch(iso: string): string {
 }
 
 // Deutsche BOS-Monatskürzel (umlautfrei, daher „mrz" statt „mär").
-const ZEITGRUPPE_MONATE = ["jan", "feb", "mrz", "apr", "mai", "jun", "jul", "aug", "sep", "okt", "nov", "dez"];
+const ZEITGRUPPE_MONATE = [
+  "jan",
+  "feb",
+  "mrz",
+  "apr",
+  "mai",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "okt",
+  "nov",
+  "dez",
+];
 
 /**
  * NATO-Zeitgruppe (Datum-Zeit-Gruppe) wie bei THWin und im BOS-Schriftverkehr
