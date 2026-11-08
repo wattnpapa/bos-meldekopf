@@ -87,7 +87,7 @@ export function aufteilungFehler(bogen: Erfassungsbogen, wahl: AufteilungsWahl):
     if (st.fuehrer < 0 || st.unterfuehrer < 0 || st.mannschaft < 0) return "Negative Stärke geht nicht.";
     const ganz = staerke(bogen);
     if (st.fuehrer > ganz.fuehrer || st.unterfuehrer > ganz.unterfuehrer || st.mannschaft > ganz.mannschaft) {
-      return `So viele sind nicht gemeldet (${ganz.fuehrer} / ${ganz.unterfuehrer} / ${ganz.mannschaft} / ${ganz.gesamt}).`;
+      return `So viele sind nicht gemeldet (${ganz.fuehrer} / ${ganz.unterfuehrer} / ${ganz.mannschaft} // ${ganz.gesamt}).`;
     }
     const mit = summe(st);
     if (mit.gesamt === 0 && fzgMit.length === 0) return "Es geht niemand und nichts mit.";
